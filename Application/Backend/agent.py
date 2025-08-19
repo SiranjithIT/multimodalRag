@@ -12,17 +12,17 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from model import llm, clip_model, clip_processor
 
-class MultiModalRagAgent:
+
+class UploadProcess:
   def __init__(self, pdf_file):
     self.doc = fitz.open(pdf_file)
-    self.all_docs = []
-    self.all_embeddings = []
-    self.image_data_store = {}
-
     self.splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
-    self.embeddings_array = self._process()
-    self.vector_store = self._vector_store()
-    
+    self.all_docs, self.embeddings_array = self._process(self.doc)
+    self.vector_store = FAISS.from_embeddings(
+      text_embeddings=[(doc.page_content, emb) for doc, emb in zip(self.all_docs, self.embeddings_array)],
+      embedding=None,
+      metadatas=[doc.metadata for doc in self.all_docs],
+    )
   
   def embed_image(self, image_data):
     """Embed image using CLIP"""
@@ -51,34 +51,25 @@ class MultiModalRagAgent:
       features = features / features.norm(dim=-1, keepdim=True)
       return features.squeeze().numpy()
   
-  def _process(self):
-    """Process the data then returns the documents and embedding array"""
-    for i,page in enumerate(self.doc):
-    ## process text
-      text=page.get_text()
+  def _process(self, doc):
+    all_docs = []
+    all_embeddings = []
+    image_data_store = {}
+    for i, page in enumerate(doc):
+      text = page.get_text()
       if text.strip():
-        ##create temporary document for splitting
         temp_doc = Document(page_content=text, metadata={"page": i, "type": "text"})
         text_chunks = self.splitter.split_documents([temp_doc])
-
-        #Embed each chunk using CLIP
+        
         for chunk in text_chunks:
           embedding = self.embed_text(chunk.page_content)
-          self.all_embeddings.append(embedding)
-          self.all_docs.append(chunk)
-
-
-      ## process images
-      ##Three Important Actions:
-
-      ##Convert PDF image to PIL format
-      ##Store as base64 for GPT-4V (which needs base64 images)
-      ##Create CLIP embedding for retrieval
-
+          all_embeddings.append(embedding)
+          all_docs.append(chunk)
+      
       for img_index, img in enumerate(page.get_images(full=True)):
         try:
           xref = img[0]
-          base_image = self.doc.extract_image(xref)
+          base_image = doc.extract_image(xref)
           image_bytes = base_image["image"]
           
           # Convert to PIL Image
@@ -95,38 +86,37 @@ class MultiModalRagAgent:
           
           # Embed image using CLIP
           embedding = self.embed_image(pil_image)
-          self.all_embeddings.append(embedding)
+          all_embeddings.append(embedding)
           
           # Create document for image
           image_doc = Document(
             page_content=f"[Image: {image_id}]",
             metadata={"page": i, "type": "image", "image_id": image_id}
           )
-          self.all_docs.append(image_doc)
+          all_docs.append(image_doc)
           
-          return np.array(self.all_embeddings)
         except Exception as e:
           print(f"Error processing image {img_index} on page {i}: {e}")
-          continue
-  
-  def _vector_store(self):
-    return FAISS.from_embeddings(
-      text_embeddings=[(doc.page_content, emb) for doc, emb in zip(self.all_docs, self.embeddings_array)],
-      embedding=None,  # We're using precomputed embeddings
-      metadatas=[doc.metadata for doc in self.all_docs],
-      
-    )
+          continue  
+    return all_docs, np.array(all_embeddings)
+    
+  def get_vector_store(self):
+    return self.vector_store
+          
 
+class MultiModalRagAgent:
+  def __init__(self, pdf_file):
+    self.process = UploadProcess(pdf_file)
+    self.vector_store = self.process.get_vector_store()
   
   def retrieve_multimodal(self, query, k=5):
     """Unified retrieval using CLIP embeddings for both text and images."""
-    query_embedding = self.embed_text(query)
+    query_embedding = self.process.embed_text(query)
     
     results = self.vector_store.similarity_search_by_vector(
         embedding=query_embedding,
         k=k
     )
-    
     return results
   
   def create_multimodal_message(self, query, retrieved_docs):

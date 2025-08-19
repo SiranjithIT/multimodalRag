@@ -1,15 +1,6 @@
 from agent import MultiModalRagAgent
 from fastapi import FastAPI
 
-app = FastAPI()
-
-
-
-
-
-
-
-
 
 if __name__ == "__main__":
   agent = MultiModalRagAgent("multimodal_sample.pdf")
