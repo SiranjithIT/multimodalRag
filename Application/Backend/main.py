@@ -1,12 +1,20 @@
 from agent import MultiModalRagAgent
 from fastapi import FastAPI, UploadFile
 from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 agent = None
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class RequestBody(BaseModel):
-    query: str
+    query: str 
 
 @app.post("/upload")
 async def upload(pdf_file: UploadFile):
@@ -15,11 +23,11 @@ async def upload(pdf_file: UploadFile):
     return {"Response": f"File {pdf_file.filename} is processed and stored to vector store"}
     
 @app.post("/query/")
-async def llm_rag(request: RequestBody):
+async def llm_rag(userQuery: RequestBody):
     global agent
     if agent != None:
-        answer = agent.multimodal_pdf_rag_pipeline(request.query)
-        return {"Response: ": answer}
+        answer = agent.multimodal_pdf_rag_pipeline(userQuery.query)
+        return {"Response": answer}
 
 
 if __name__ == "__main__":
