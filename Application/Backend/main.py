@@ -1,5 +1,25 @@
 from agent import MultiModalRagAgent
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile
+from pydantic import BaseModel
+
+app = FastAPI()
+agent = None
+
+class RequestBody(BaseModel):
+    query: str
+
+@app.post("/upload")
+async def upload(pdf_file: UploadFile):
+    global agent 
+    agent = MultiModalRagAgent(pdf_file=pdf_file)
+    return {"Response": f"File {pdf_file.filename} is processed and stored to vector store"}
+    
+@app.post("/query/")
+async def llm_rag(request: RequestBody):
+    global agent
+    if agent != None:
+        answer = agent.multimodal_pdf_rag_pipeline(request.query)
+        return {"Response: ": answer}
 
 
 if __name__ == "__main__":
@@ -12,8 +32,8 @@ if __name__ == "__main__":
   ]
 
   for query in queries:
-      print(f"\nQuery: {query}")
-      print("-" * 50)
-      answer = agent.multimodal_pdf_rag_pipeline(query)
-      print(f"Answer: {answer}")
-      print("=" * 70)
+    print(f"\nQuery: {query}")
+    print("-" * 50)
+    answer = agent.multimodal_pdf_rag_pipeline(query)
+    print(f"Answer: {answer}")
+    print("=" * 70)

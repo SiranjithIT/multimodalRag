@@ -15,7 +15,7 @@ from model import llm, clip_model, clip_processor
 
 class UploadProcess:
   def __init__(self, pdf_file):
-    self.doc = fitz.open(pdf_file)
+    self.doc = fitz.open(stream=pdf_file.file.read(), filetype="pdf")
     self.splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
     self.all_docs, self.embeddings_array = self._process(self.doc)
     self.vector_store = FAISS.from_embeddings(
