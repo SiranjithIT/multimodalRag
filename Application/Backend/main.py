@@ -22,7 +22,7 @@ async def upload(pdf_file: UploadFile):
     agent = MultiModalRagAgent(pdf_file=pdf_file)
     return {"Response": f"File {pdf_file.filename} is processed and stored to vector store"}
     
-@app.post("/query/")
+@app.post("/query")
 async def llm_rag(userQuery: RequestBody):
     global agent
     if agent != None:

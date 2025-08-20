@@ -17,12 +17,15 @@ class UploadProcess:
   def __init__(self, pdf_file):
     self.doc = fitz.open(stream=pdf_file.file.read(), filetype="pdf")
     self.splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
-    self.all_docs, self.embeddings_array = self._process(self.doc)
+    self.all_docs, self.embeddings_array, self.image_data_store = self._process(self.doc)
     self.vector_store = FAISS.from_embeddings(
       text_embeddings=[(doc.page_content, emb) for doc, emb in zip(self.all_docs, self.embeddings_array)],
       embedding=None,
       metadatas=[doc.metadata for doc in self.all_docs],
     )
+    
+  def get_image_store(self):
+    return self.image_data_store
   
   def embed_image(self, image_data):
     """Embed image using CLIP"""
@@ -82,7 +85,7 @@ class UploadProcess:
           buffered = io.BytesIO()
           pil_image.save(buffered, format="PNG")
           img_base64 = base64.b64encode(buffered.getvalue()).decode()
-          self.image_data_store[image_id] = img_base64
+          image_data_store[image_id] = img_base64
           
           # Embed image using CLIP
           embedding = self.embed_image(pil_image)
@@ -98,7 +101,7 @@ class UploadProcess:
         except Exception as e:
           print(f"Error processing image {img_index} on page {i}: {e}")
           continue  
-    return all_docs, np.array(all_embeddings)
+    return all_docs, np.array(all_embeddings), image_data_store
     
   def get_vector_store(self):
     return self.vector_store
@@ -108,6 +111,7 @@ class MultiModalRagAgent:
   def __init__(self, pdf_file):
     self.process = UploadProcess(pdf_file)
     self.vector_store = self.process.get_vector_store()
+    
   
   def retrieve_multimodal(self, query, k=5):
     """Unified retrieval using CLIP embeddings for both text and images."""
@@ -147,7 +151,7 @@ class MultiModalRagAgent:
     # Add images
     for doc in image_docs:
         image_id = doc.metadata.get("image_id")
-        if image_id and image_id in self.image_data_store:
+        if image_id and image_id in self.process.get_image_store():
             content.append({
                 "type": "text",
                 "text": f"\n[Image from page {doc.metadata['page']}]:\n"
@@ -155,7 +159,7 @@ class MultiModalRagAgent:
             content.append({
                 "type": "image_url",
                 "image_url": {
-                    "url": f"data:image/png;base64,{self.image_data_store[image_id]}"
+                    "url": f"data:image/png;base64,{self.process.get_image_store()[image_id]}"
                 }
             })
     

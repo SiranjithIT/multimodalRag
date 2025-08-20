@@ -25,7 +25,7 @@ export class RagService {
   }
 
   askQuery(query: userQuery): Observable<serverResponse>{
-    return this.http.post<serverResponse>(`${this.url}/query/`,query);
+    return this.http.post<serverResponse>(`${this.url}/query`,query);
   }
 
 }
