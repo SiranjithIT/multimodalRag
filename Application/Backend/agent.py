@@ -180,7 +180,7 @@ class MultiModalRagAgent:
     message = self.create_multimodal_message(query, context_docs)
     print(message)
     
-    # Get response from GPT-4V
+    # Get response from LLM
     response = llm.invoke([message])
     
     # Print retrieved context info
